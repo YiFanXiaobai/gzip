@@ -28,10 +28,6 @@ func (g *gzipWriter) reset(r gin.ResponseWriter) {
 	g.writer.Reset(g.ResponseWriter)
 }
 
-func (g *gzipWriter) resetGZipWriter() {
-	g.writer.Reset(g.ResponseWriter)
-}
-
 func (g *gzipWriter) WriteString(s string) (int, error) {
 	g.Header().Del("Content-Length")
 	return g.writer.Write([]byte(s))
