@@ -2,7 +2,6 @@ package gzip
 
 import (
 	"compress/gzip"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
@@ -12,21 +11,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var handler *gzipHandler
+
 type gzipHandler struct {
 	*Options
-	gzPool sync.Pool
+	gzipWriterPool sync.Pool
 }
 
 func newGzipHandler(level int, options ...Option) *gzipHandler {
-	handler := &gzipHandler{
+	handler = &gzipHandler{
 		Options: DefaultOptions,
-		gzPool: sync.Pool{
+		gzipWriterPool: sync.Pool{
 			New: func() interface{} {
 				gz, err := gzip.NewWriterLevel(ioutil.Discard, level)
 				if err != nil {
 					panic(err)
 				}
-				return gz
+				return &gzipWriter{ResponseWriter: nil, writer: gz}
 			},
 		},
 	}
@@ -45,18 +46,10 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	gz := g.gzPool.Get().(*gzip.Writer)
-	defer g.gzPool.Put(gz)
-	defer gz.Reset(ioutil.Discard)
-	gz.Reset(c.Writer)
+	gzW := g.gzipWriterPool.Get().(*gzipWriter)
+	gzW.reset(c.Writer)
+	c.Writer = gzW
 
-	c.Header("Content-Encoding", "gzip")
-	c.Header("Vary", "Accept-Encoding")
-	c.Writer = &gzipWriter{c.Writer, gz}
-	defer func() {
-		gz.Close()
-		c.Header("Content-Length", fmt.Sprint(c.Writer.Size()))
-	}()
 	c.Next()
 }
 
@@ -79,5 +72,9 @@ func (g *gzipHandler) shouldCompress(req *http.Request) bool {
 		return false
 	}
 
-	return true
+	return g.IncludedPathsRegexs.Contains(req.URL.Path)
+}
+
+func putGzipWriter(gz *gzipWriter) {
+	handler.gzipWriterPool.Put(gz)
 }

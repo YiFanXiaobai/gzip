@@ -19,6 +19,8 @@ var (
 )
 
 type Options struct {
+	// IncludedPathsRegexs lowest priority
+	IncludedPathsRegexs  IncludedPathsRegexs
 	ExcludedExtensions   ExcludedExtensions
 	ExcludedPaths        ExcludedPaths
 	ExcludedPathesRegexs ExcludedPathesRegexs
@@ -26,6 +28,12 @@ type Options struct {
 }
 
 type Option func(*Options)
+
+func WithIncludedPathsRegexs(args []string) Option {
+	return func(o *Options) {
+		o.IncludedPathsRegexs = NewIncludedPathsRegexs(args)
+	}
+}
 
 func WithExcludedExtensions(args []string) Option {
 	return func(o *Options) {
@@ -49,6 +57,25 @@ func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
 	return func(o *Options) {
 		o.DecompressFn = decompressFn
 	}
+}
+
+type IncludedPathsRegexs []*regexp.Regexp
+
+func NewIncludedPathsRegexs(regexs []string) IncludedPathsRegexs {
+	result := make([]*regexp.Regexp, len(regexs))
+	for i, reg := range regexs {
+		result[i] = regexp.MustCompile(reg)
+	}
+	return result
+}
+
+func (e IncludedPathsRegexs) Contains(requestURI string) bool {
+	for _, reg := range e {
+		if reg.MatchString(requestURI) {
+			return true
+		}
+	}
+	return false
 }
 
 // Using map for better lookup performance
